@@ -6,9 +6,23 @@ const app = express();
 // Middleware to parse JSON
 app.use(express.json());
 
-// Mocked data for 30 carriers with `itemType` field added
+// CORS Middleware
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*"); // Allow requests from any origin
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept"
+  );
+  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
+// Mocked data for carriers
 const carriers = [
-    { name: "DHL Express", cost: 12.5, co2Emissions: 2.5, deliveryTime: 1, serviceOptions: ["Drop-off", "Free Pickup"], rating: 4.8, itemType: "fragile", category: "Express" },
+      { name: "DHL Express", cost: 12.5, co2Emissions: 2.5, deliveryTime: 1, serviceOptions: ["Drop-off", "Free Pickup"], rating: 4.8, itemType: "fragile", category: "Express" },
     { name: "FedEx", cost: 11.0, co2Emissions: 2.2, deliveryTime: 1, serviceOptions: ["Drop-off"], rating: 4.7, itemType: "cold", category: "Express" },
     { name: "UPS", cost: 13.0, co2Emissions: 2.8, deliveryTime: 2, serviceOptions: ["Drop-off", "Free Pickup"], rating: 4.6, itemType: "fragile", category: "Normal" },
     { name: "Blue Dart", cost: 10.0, co2Emissions: 3.0, deliveryTime: 2, serviceOptions: ["Drop-off"], rating: 4.5, itemType: "standard", category: "Normal" },
@@ -40,52 +54,91 @@ const carriers = [
     { name: "Hongkong Post", cost: 10.8, co2Emissions: 3.3, deliveryTime: 2, serviceOptions: ["Drop-off"], rating: 4.3, itemType: "fragile", category: "Normal" }
 ];
 
-
 // Predefined carrier sets for specific routes
 const routeCarrierMap = {
-    "Mumbai to UAE": carriers.slice(0, 10),
-    "Delhi to LA": carriers.slice(10, 20),
-    "Chennai to Japan": carriers.slice(20, 30),
+  "Mumbai to UAE": carriers.slice(0, 10),
+  "Delhi to LA": carriers.slice(10, 20),
+  "Chennai to Japan": carriers.slice(20, 30),
 };
 
-app.post("/.netlify/functions/api", (req, res) => {
+
+app.get("/.netlify/functions/api", (req, res) => {
     try {
-        // Extract input parameters
-        const { src, dest, weight, idealShippingDuration, itemType, shippingCategory } = req.body;
-
-        // Validate inputs
-        if (!src || !dest || !weight || !idealShippingDuration || !itemType || !shippingCategory) {
-            return res.status(400).json({ success: false, error: "Source, destination, weight, ideal shipping duration, item type, and shipping category are required" });
-        }
-
-        // Match the route
-        const routeKey = `${src} to ${dest}`;
-        const routeCarriers = routeCarrierMap[routeKey];
-
-        if (!routeCarriers) {
-            return res.status(404).json({ success: false, error: "No carriers found for the specified route" });
-        }
-
-        // Filter carriers based on the provided criteria
-        const filteredCarriers = routeCarriers.filter(carrier => 
-            carrier.deliveryTime <= idealShippingDuration && 
-            carrier.itemType === itemType &&
-            (shippingCategory === "Express" ? carrier.deliveryTime <= 2 : 
-             shippingCategory === "Normal" ? carrier.deliveryTime <= 5 : 
-             shippingCategory === "Green" ? carrier.co2Emissions <= 3.0 : true)
-        );
-
-        // Sort by cost as an example of further optimization
-        const sortedCarriers = filteredCarriers.sort((a, b) => a.cost - b.cost);
-
-        // Ensure at least 4-5 carriers are shown
-        const finalCarriers = sortedCarriers.length > 5 ? sortedCarriers.slice(0, 5) : sortedCarriers;
-
-        res.json({ success: true, carriers: finalCarriers });
+      // Extract input parameters from query
+      const {
+        src,
+        dest,
+        weight,
+        idealShippingDuration,
+        itemType,
+        shippingCategory,
+      } = req.query;
+  
+      // Validate inputs
+      if (
+        !src ||
+        !dest ||
+        !weight ||
+        !idealShippingDuration ||
+        !itemType ||
+        !shippingCategory
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "All fields (source, destination, weight, ideal shipping duration, item type, and shipping category) are required.",
+        });
+      }
+  
+      // Match the route
+      const routeKey = `${src} to ${dest}`;
+      const routeCarriers = routeCarrierMap[routeKey];
+  
+      if (!routeCarriers) {
+        return res.status(404).json({
+          success: false,
+          error: `No carriers found for the route "${routeKey}".`,
+        });
+      }
+  
+      // Filter carriers based on criteria
+      const filteredCarriers = routeCarriers.filter(
+        (carrier) =>
+          carrier.deliveryTime <= idealShippingDuration &&
+          carrier.itemType === itemType &&
+          (shippingCategory === "Express"
+            ? carrier.deliveryTime <= 2
+            : shippingCategory === "Normal"
+            ? carrier.deliveryTime <= 5
+            : shippingCategory === "Green"
+            ? carrier.co2Emissions <= 3.0
+            : true) // Allow all if no valid category is provided
+      );
+  
+      // Sort filtered carriers by cost (ascending)
+      const sortedCarriers = filteredCarriers.sort((a, b) => a.cost - b.cost);
+  
+      // Limit to 4-5 carriers or return all if fewer
+      const finalCarriers = sortedCarriers.slice(
+        0,
+        Math.max(5, sortedCarriers.length)
+      );
+  
+      if (finalCarriers.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "No carriers match the specified criteria.",
+        });
+      }
+  
+      res.json({ success: true, carriers: finalCarriers });
     } catch (error) {
-        res.status(500).json({ success: false, error: "An error occurred while processing your request." });
+      console.error("Error processing request:", error);
+      res.status(500).json({
+        success: false,
+        error: "An internal error occurred. Please try again later.",
+      });
     }
-});
-
-
-module.exports.handler = ServerlessHttp(app);
+  });
+  
+  module.exports.handler = ServerlessHttp(app);
