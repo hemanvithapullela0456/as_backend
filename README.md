@@ -33,24 +33,37 @@ Expedia's backend provides the critical API functionality for the platform's **C
 
 ---
 
-### **⚙️ Setup Locally**  
+**📋 Example Query String:**  
+```http  
+GET /api?origin=Mumbai&destination=London&weight=20&type=fragile  
+```  
 
-1. **🔗 Clone the repository**:  
-   ```bash  
-   git clone https://github.com/yourusername/as_backend.git  
-   cd as_backend  
-   ```  
-
-2. **📦 Install dependencies**:  
-   ```bash  
-   npm install  
-   ```  
-
-3. **▶️ Run locally with Netlify**:  
-   ```bash  
-   netlify dev  
-   ```  
-   By default, the server runs on `http://localhost:8888`.  
+**📋 Example Response:**  
+```json  
+{
+  "status": "success",
+  "data": [
+    {
+      "carrier": "DHL",
+      "price": 500,
+      "estimated_delivery": "5 days",
+      "rating": 4.8
+    },
+    {
+      "carrier": "FedEx",
+      "price": 450,
+      "estimated_delivery": "4 days",
+      "rating": 4.5
+    },
+    {
+      "carrier": "Blue Dart",
+      "price": 600,
+      "estimated_delivery": "6 days",
+      "rating": 4.2
+    }
+  ]
+}
+```  
 
 ---
 
